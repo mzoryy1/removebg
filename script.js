@@ -1,5 +1,5 @@
-// NOTE: For a real-world application, this API key should be stored on a secure backend server.
-// Storing it in client-side code (like this Codepen) is INSECURE.
+// NOTE: For a real-world Android app, this API key MUST be stored on a secure backend server.
+// Storing it in client-side code is INSECURE and only done here for the Codepen example.
 const REMOVE_BG_API_KEY = 'P61GTYVnBgZ1UVeVKUqT9WCS';
 const REMOVE_BG_API_URL = 'https://api.remove.bg/v1.0/removebg';
 const MAX_FILE_COUNT = 5;
@@ -37,11 +37,10 @@ function updateHistoryUI() {
     return;
   }
 
-  processedImages.forEach((item, index) => {
+  processedImages.forEach((item) => {
     const itemEl = document.createElement('div');
     itemEl.classList.add('history-item');
     
-    // Create the image element with a white background for PNG transparency
     const img = new Image();
     img.src = item.url;
     
@@ -66,7 +65,7 @@ function updateHistoryUI() {
 
 function updateUploadUI() {
   const count = filesToProcess.length;
-  fileCountDisplay.textContent = count > 0 ? `${count} file${count > 1 ? 's' : ''} ready to process.` : '';
+  fileCountDisplay.textContent = count > 0 ? `${count} file${count > 1 ? 's' : ''} ready.` : '';
   removeBgBtn.disabled = count === 0 || isProcessing;
 }
 
@@ -78,7 +77,7 @@ function setProcessingState(processing) {
 }
 
 function updateProgress(fileName, index, total) {
-  const percentage = Math.round((index / total) * 100);
+  const percentage = total > 0 ? Math.round((index / total) * 100) : 0;
   progressBar.style.width = `${percentage}%`;
   progressText.textContent = `${percentage}% Complete (${index}/${total} images)`;
   currentFileNameEl.textContent = `Processing: ${fileName}`;
@@ -90,27 +89,16 @@ function showError(message) {
   setTimeout(() => errorMessageEl.classList.add('hidden'), 5000);
 }
 
-// ------------------- Core Functions -------------------
-
-/**
- * Converts a file to a Data URL (Base64) for history thumbnails.
- * @param {File} file 
- * @returns {Promise<string>}
- */
-function fileToDataUrl(file) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(file);
-    });
-}
-
 /**
  * Creates an image element and adds it to the main results grid.
  * @param {string} url - The URL (Data URL or Blob URL) of the result image.
  * @param {string} name - The original file name.
  */
 function displayResult(url, name) {
+  // Remove the "empty message" if it exists
+  const emptyMsg = resultsDisplay.querySelector('.empty-message');
+  if (emptyMsg) emptyMsg.remove();
+  
   const card = document.createElement('div');
   card.classList.add('result-card');
   
@@ -155,25 +143,28 @@ async function removeBackground(file) {
       method: 'POST',
       headers: {
         'X-Api-Key': REMOVE_BG_API_KEY,
-        // NOTE: Do NOT set 'Content-Type' header with FormData, 
-        // the browser will set it automatically with the correct boundary.
-        'Accept': 'image/png' // Requesting the final image file directly
+        'Accept': 'image/png'
       },
       body: formData,
     });
 
     if (response.ok) {
       const blob = await response.blob();
-      return URL.createObjectURL(blob);
+      // Convert Blob to Data URL for easy storage/use in the client-side app
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+      });
     } else {
-      // Handle API-specific errors (e.g., rate limits, invalid file)
       const errorText = await response.text();
-      let msg = `API Error: ${response.status} - ${errorText.substring(0, 100)}...`;
+      let msg = `API Error: ${response.status}`;
       try {
         const json = JSON.parse(errorText);
         msg = json.errors ? json.errors[0].title : msg;
       } catch (e) {
-        // Just use the status code and snippet if JSON parsing fails
+        // Fallback
       }
       throw new Error(msg);
     }
@@ -192,18 +183,19 @@ async function processAllFiles() {
 
   setProcessingState(true);
   let errorOccurred = false;
+  const totalFiles = filesToProcess.length;
 
-  for (let i = 0; i < filesToProcess.length; i++) {
+  for (let i = 0; i < totalFiles; i++) {
     const file = filesToProcess[i];
-    const originalName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
+    const originalName = file.name.replace(/\.[^/.]+$/, "");
     const newFileName = `${originalName}-no-bg.png`;
 
-    updateProgress(file.name, i + 1, filesToProcess.length);
+    updateProgress(file.name, i + 1, totalFiles);
     
     try {
-      const resultUrl = await removeBackground(file);
+      // resultUrl is a Data URL
+      const resultUrl = await removeBackground(file); 
       
-      // Add to history and display
       processedImages.push({
         url: resultUrl,
         name: newFileName,
@@ -216,26 +208,26 @@ async function processAllFiles() {
     } catch (error) {
       showError(`Failed to process ${file.name}: ${error.message}`);
       errorOccurred = true;
-      // Continue to the next file even if one fails
     }
   }
 
-  // Clear files to process after job completion
+  // Final cleanup
   filesToProcess = [];
-  imageUpload.value = null; // Clear input field
+  imageUpload.value = null;
   setProcessingState(false);
   
   if (!errorOccurred) {
-      updateProgress('All files processed!', filesToProcess.length, filesToProcess.length);
+      updateProgress('All files processed!', totalFiles, totalFiles);
       setTimeout(() => progressContainer.classList.add('hidden'), 2000);
   }
+  updateUploadUI(); // Ensure button is disabled
 }
 
 // ------------------- Download and History Management -------------------
 
 /**
- * Handles the download of a single image.
- * @param {string} url - Blob or Data URL of the image.
+ * Handles the download of a single image (Data URL).
+ * @param {string} url - Data URL of the image.
  * @param {string} name - The filename.
  */
 function downloadSingleImage(url, name) {
@@ -248,7 +240,7 @@ function downloadSingleImage(url, name) {
 }
 
 /**
- * Downloads all processed images as a ZIP file.
+ * Downloads all processed images as a ZIP file. (Requires JSZip library)
  */
 async function downloadAllAsZip() {
   if (processedImages.length === 0) return;
@@ -256,9 +248,6 @@ async function downloadAllAsZip() {
   downloadAllBtn.textContent = 'Creating ZIP...';
   downloadAllBtn.disabled = true;
 
-  // JSZip library is required for this. You'd need to add it 
-  // as an external resource in Codepen settings:
-  // <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.5.0/jszip.min.js"></script>
   if (typeof JSZip === 'undefined') {
     showError('JSZip library is missing. Please add it to your project!');
     downloadAllBtn.textContent = 'Download All (ZIP)';
@@ -269,15 +258,13 @@ async function downloadAllAsZip() {
   const zip = new JSZip();
 
   for (const item of processedImages) {
-    // Fetch the image blob from the object URL
-    const response = await fetch(item.url);
-    const blob = await response.blob();
-    zip.file(item.name, blob);
+    // Extract base64 data from the Data URL
+    const base64Data = item.url.split(',')[1];
+    zip.file(item.name, base64Data, {base64: true});
   }
 
   zip.generateAsync({ type: 'blob' })
     .then(content => {
-      // Use filesaver.js or a simple download link
       const zipName = `background-removed-${Date.now()}.zip`;
       
       const link = document.createElement('a');
@@ -286,6 +273,9 @@ async function downloadAllAsZip() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Cleanup Blob URL after use
+      URL.revokeObjectURL(link.href);
       
       downloadAllBtn.textContent = 'Download All (ZIP)';
       downloadAllBtn.disabled = false;
@@ -301,7 +291,7 @@ async function downloadAllAsZip() {
 function clearHistory() {
   if (!confirm('Are you sure you want to clear all history and processed images?')) return;
   processedImages = [];
-  resultsDisplay.innerHTML = '';
+  resultsDisplay.innerHTML = '<p class="empty-message">Processed images will appear here.</p>';
   updateHistoryUI();
 }
 
@@ -309,22 +299,21 @@ function clearHistory() {
 
 // 1. Splash Screen Timeout
 window.addEventListener('load', () => {
-  // Use a slight delay for the splash screen effect
   setTimeout(() => {
     splashScreen.style.opacity = '0';
     appContainer.classList.remove('hidden');
     setTimeout(() => {
       splashScreen.style.display = 'none';
-    }, 1000); // Wait for the fade-out transition
-  }, 1500);
+    }, 800); 
+  }, 1000);
 });
 
 // 2. File Input Change
 imageUpload.addEventListener('change', (e) => {
   const newFiles = Array.from(e.target.files);
   if (newFiles.length > MAX_FILE_COUNT) {
-    showError(`Maximum ${MAX_FILE_COUNT} files allowed. Please select fewer images.`);
-    imageUpload.value = null; // Clear the selection
+    showError(`Max ${MAX_FILE_COUNT} files allowed.`);
+    imageUpload.value = null;
     filesToProcess = [];
   } else {
     filesToProcess = newFiles;
@@ -339,13 +328,13 @@ removeBgBtn.addEventListener('click', processAllFiles);
 clearHistoryBtn.addEventListener('click', clearHistory);
 downloadAllBtn.addEventListener('click', downloadAllAsZip);
 
-// 5. Drag and Drop handlers (to enhance UX)
+// 5. Drag and Drop handlers 
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
   fileLabel.addEventListener(eventName, preventDefaults, false);
 });
 
 ['dragenter', 'dragover'].forEach(eventName => {
-  fileLabel.addEventListener(eventName, () => fileLabel.style.backgroundColor = 'rgba(0, 188, 212, 0.15)', false);
+  fileLabel.addEventListener(eventName, () => fileLabel.style.backgroundColor = 'rgba(0, 188, 212, 0.1)', false);
 });
 
 ['dragleave', 'drop'].forEach(eventName => {
@@ -359,7 +348,7 @@ fileLabel.addEventListener('drop', (e) => {
   if (files.length > MAX_FILE_COUNT) {
     showError(`Maximum ${MAX_FILE_COUNT} files allowed.`);
   } else {
-    imageUpload.files = files; // Set the files to the input element
+    imageUpload.files = files;
     filesToProcess = Array.from(files);
     updateUploadUI();
   }
@@ -371,8 +360,4 @@ function preventDefaults(e) {
 }
 
 // Initial state setup
-updateHistoryUI(); // Initialize history sidebar
-
-// IMPORTANT: Add external libraries for ZIP functionality (JSZip)
-// You MUST add this script tag in your Codepen's JS settings:
-// https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js
+updateHistoryUI();
