@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Background Remover</title>
+    <!-- Font Awesome & JSZip for Icons and Zipping -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div class="splash-screen">
+        <div class="logo">
+            <i class="fas fa-wand-magic-sparkles"></i>
+            <h1>BG Remover</h1>
+            <p>Powered by remove.bg</p>
+        </div>
+    </div>
+
+    <!-- Main App Wrapper -->
+    <div class="app-wrapper">
+        <!-- Header Controls -->
+        <header class="app-header">
+            <div class="header-left">
+                <label for="file-upload" class="file-upload-btn">
+                    <i class="fas fa-plus"></i> <span>New Image</span>
+                </label>
+                <input id="file-upload" type="file" accept="image/*">
+            </div>
+            <div class="header-right">
+                <button id="download-all-btn" class="control-btn" disabled title="Download All as ZIP">
+                    <i class="fas fa-file-zipper"></i>
+                </button>
+                <button id="clear-history-btn" class="control-btn" disabled title="Clear History">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Image Processing Area -->
+            <div class="image-processor">
+                <div id="image-placeholder" class="image-placeholder">
+                    <i class="fas fa-image"></i>
+                    <p>Upload an image to start</p>
+                    <span>Supports JPG, PNG, WEBP</span>
+                </div>
+                <div id="image-display-area" class="image-display-area hidden">
+                    <div class="image-container">
+                        <div id="before-after-slider" class="before-after-slider">
+                            <img id="before-image" src="#" alt="Original Image">
+                            <div id="after-image-wrapper" class="after-image-wrapper">
+                            <img id="after-image" src="#" alt="Background Removed Image">
+                            </div>
+                            <div id="slider-handle" class="slider-handle"><i class="fas fa-arrows-alt-h"></i></div>
+                        </div>
+                    </div>
+                    <div class="image-controls">
+                        <button id="remove-bg-btn" class="action-btn">
+                            <span class="btn-text"><i class="fas fa-wand-magic-sparkles"></i> Remove Background</span>
+                            <div class="progress-bar"></div>
+                        </button>
+                        <div class="color-picker-wrapper">
+                            <label for="color-picker">BG:</label>
+                            <div class="colors">
+                                <span class="color active" style="background: transparent;" data-color="transparent"></span>
+                                <span class="color" style="background: #ffffff;" data-color="#ffffff"></span>
+                                <span class="color" style="background: #000000;" data-color="#000000"></span>
+                                <span class="color" style="background: #3498db;" data-color="#3498db"></span>
+                                <span class="color" style="background: #e74c3c;" data-color="#e74c3c"></span>
+                                <input type="color" id="color-picker" value="#3498db">
+                            </div>
+                        </div>
+                        <button id="download-btn" class="download-btn" disabled>
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Panel -->
+            <aside class="history-panel">
+                <h2>History</h2>
+                <div id="history-items" class="history-items">
+                    <p class="no-history">No items yet.</p>
+                </div>
+            </aside>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
