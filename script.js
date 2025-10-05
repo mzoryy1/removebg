@@ -1,378 +1,378 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2709
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+// NOTE: For a real-world application, this API key should be stored on a secure backend server.
+// Storing it in client-side code (like this Codepen) is INSECURE.
+const REMOVE_BG_API_KEY = 'P61GTYVnBgZ1UVeVKUqT9WCS';
+const REMOVE_BG_API_URL = 'https://api.remove.bg/v1.0/removebg';
+const MAX_FILE_COUNT = 5;
 
-\f0\fs24 \cf0 document.addEventListener('DOMContentLoaded', () => \{\
-    // --- API Key ---\
-    const API_KEY = 'P61GTYVnBgZ1UVeVKUqT9WCS';\
-\
-    // --- Element Selectors ---\
-    const splashScreen = document.querySelector('.splash-screen');\
-    const appWrapper = document.querySelector('.app-wrapper');\
-    const fileUploadInput = document.getElementById('file-upload');\
-    const removeBgBtn = document.getElementById('remove-bg-btn');\
-    const imagePlaceholder = document.getElementById('image-placeholder');\
-    const imageDisplayArea = document.getElementById('image-display-area');\
-    const beforeImage = document.getElementById('before-image');\
-    const afterImage = document.getElementById('after-image');\
-    const afterImageWrapper = document.getElementById('after-image-wrapper');\
-    const downloadBtn = document.getElementById('download-btn');\
-    const downloadAllBtn = document.getElementById('download-all-btn');\
-    const clearHistoryBtn = document.getElementById('clear-history-btn');\
-    const historyItemsContainer = document.getElementById('history-items');\
-    const colorOptions = document.querySelector('.colors');\
-    const customColorPicker = document.getElementById('color-picker');\
-    \
-    // Before/After Slider\
-    const slider = document.getElementById('before-after-slider');\
-    const handle = document.getElementById('slider-handle');\
-\
-    // --- State Management ---\
-    let history = [];\
-    let currentImage = \{\
-        id: null,\
-        name: null,\
-        originalUrl: null,\
-        processedUrl: null,\
-        bgColor: 'transparent'\
-    \};\
-    let isDragging = false;\
-\
-\
-    // --- Initialization ---\
-    const init = () => \{\
-        // Hide splash screen and show app\
-        setTimeout(() => \{\
-            splashScreen.classList.add('hidden');\
-            appWrapper.classList.add('visible');\
-        \}, 1500);\
-\
-        // Event Listeners\
-        fileUploadInput.addEventListener('change', handleFileSelect);\
-        removeBgBtn.addEventListener('click', processImage);\
-        downloadBtn.addEventListener('click', downloadCurrentImage);\
-        downloadAllBtn.addEventListener('click', downloadAllAsZip);\
-        clearHistoryBtn.addEventListener('click', clearHistory);\
-        colorOptions.addEventListener('click', handleColorChange);\
-        customColorPicker.addEventListener('input', handleCustomColorChange);\
-\
-        // Slider events for both mouse and touch\
-        handle.addEventListener('mousedown', startDrag);\
-        document.addEventListener('mouseup', endDrag);\
-        document.addEventListener('mousemove', moveSlider);\
-        \
-        slider.addEventListener('touchstart', startDrag);\
-        document.addEventListener('touchend', endDrag);\
-        document.addEventListener('touchmove', moveSlider);\
-\
-        // Set up a resize observer to keep the after image aligned\
-        new ResizeObserver(() => \{\
-            if (!imageDisplayArea.classList.contains('hidden')) \{\
-                const sliderRect = slider.getBoundingClientRect();\
-                if (sliderRect.width > 0) \{\
-                    afterImage.style.width = `$\{sliderRect.width\}px`;\
-                \}\
-            \}\
-        \}).observe(slider);\
-    \};\
-    \
-    // --- File Handling ---\
-    const handleFileSelect = (e) => \{\
-        const file = e.target.files[0];\
-        if (!file) return;\
-\
-        const reader = new FileReader();\
-        reader.onload = (event) => \{\
-            currentImage = \{\
-                id: Date.now(),\
-                name: file.name.replace(/\\.[^/.]+$/, ""),\
-                originalUrl: event.target.result,\
-                processedUrl: null,\
-                bgColor: 'transparent'\
-            \};\
-            \
-            beforeImage.src = currentImage.originalUrl;\
-            // Also set afterImage src to original initially to correctly calculate dimensions\
-            afterImage.src = currentImage.originalUrl; \
-\
-            // Set dimensions once the image is loaded to ensure alignment\
-            beforeImage.onload = () => \{\
-                const sliderRect = slider.getBoundingClientRect();\
-                if (sliderRect.width > 0) \{\
-                   afterImage.style.width = `$\{sliderRect.width\}px`;\
-                \}\
-            \};\
-            \
-            imagePlaceholder.classList.add('hidden');\
-            imageDisplayArea.classList.remove('hidden');\
-            removeBgBtn.classList.remove('loading');\
-            removeBgBtn.disabled = false;\
-            downloadBtn.disabled = true;\
-\
-            // Hide the processed image until it's ready\
-            afterImageWrapper.style.opacity = '0';\
-\
-            resetSlider();\
-            updateBackgroundColor('transparent');\
-        \};\
-        reader.readAsDataURL(file);\
-    \};\
-\
-    // --- API Interaction & Processing ---\
-    const processImage = async () => \{\
-        if (!fileUploadInput.files[0] && !currentImage.originalUrl) \{\
-            alert('Please upload an image first.');\
-            return;\
-        \}\
-\
-        toggleLoading(true);\
-\
-        // Convert data URL back to blob for API submission\
-        const blob = await (await fetch(currentImage.originalUrl)).blob();\
-        \
-        const formData = new FormData();\
-        formData.append('image_file', blob, currentImage.name + '.jpg');\
-        formData.append('size', 'auto');\
-\
-        try \{\
-            const response = await fetch('https://api.remove.bg/v1.0/removebg', \{\
-                method: 'POST',\
-                headers: \{ 'X-Api-Key': API_KEY \},\
-                body: formData,\
-            \});\
-\
-            if (!response.ok) \{\
-                const errorData = await response.json();\
-                const errorMessage = errorData.errors?.[0]?.title || 'An unknown error occurred.';\
-                throw new Error(`API Error: $\{errorMessage\}`);\
-            \}\
-\
-            const resultBlob = await response.blob();\
-            currentImage.processedUrl = URL.createObjectURL(resultBlob);\
-            \
-            // Set the afterImage source and make it visible\
-            afterImage.src = currentImage.processedUrl;\
-            afterImageWrapper.style.opacity = '1';\
-            \
-            downloadBtn.disabled = false;\
-            \
-            saveToHistory();\
-\
-        \} catch (error) \{\
-            alert(error.message);\
-        \} finally \{\
-            toggleLoading(false);\
-        \}\
-    \};\
-    \
-    const toggleLoading = (isLoading) => \{\
-         removeBgBtn.classList.toggle('loading', isLoading);\
-         removeBgBtn.disabled = isLoading;\
-    \};\
-    \
-    // --- Drag and Slider Functions ---\
-    const startDrag = (e) => \{\
-        e.preventDefault();\
-        isDragging = true;\
-    \}\
-\
-    const endDrag = () => \{\
-        isDragging = false;\
-    \}\
-\
-    function moveSlider(e) \{\
-        if (!isDragging) return;\
-        const rect = slider.getBoundingClientRect();\
-        // Use clientX for mouse events, and the first touch point for touch events\
-        const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;\
-        let x = clientX - rect.left;\
-        \
-        // Constrain the slider handle within the image container\
-        if (x < 0) x = 0;\
-        if (x > rect.width) x = rect.width;\
-        \
-        const percent = (x / rect.width) * 100;\
-        handle.style.left = `$\{percent\}%`;\
-        afterImageWrapper.style.width = `$\{percent\}%`;\
-    \}\
-    \
-    function resetSlider() \{\
-        handle.style.left = '50%';\
-        afterImageWrapper.style.width = '50%';\
-        isDragging = false;\
-    \}\
-\
-    // --- UI & State Updates ---\
-    const handleColorChange = (e) => \{\
-        if (e.target.classList.contains('color')) \{\
-            const color = e.target.dataset.color;\
-            updateBackgroundColor(color);\
-            currentImage.bgColor = color;\
-            if (document.querySelector('.color.active')) \{\
-                document.querySelector('.color.active').classList.remove('active');\
-            \}\
-            e.target.classList.add('active');\
-        \}\
-    \};\
-    \
-    const handleCustomColorChange = (e) => \{\
-        const color = e.target.value;\
-        updateBackgroundColor(color);\
-        currentImage.bgColor = color;\
-        const activeColor = document.querySelector('.color.active');\
-        if (activeColor) activeColor.classList.remove('active');\
-    \};\
-\
-    const updateBackgroundColor = (color) => \{\
-        afterImageWrapper.style.backgroundColor = color;\
-        // Also update the main image container if the color is not transparent\
-        const container = document.querySelector('.image-container');\
-        if (color === 'transparent') \{\
-             container.style.backgroundImage = 'linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%)';\
-        \} else \{\
-             container.style.backgroundImage = 'none';\
-             container.style.backgroundColor = color;\
-        \}\
-    \};\
-\
-    // --- History Management ---\
-    const saveToHistory = () => \{\
-        const existingIndex = history.findIndex(item => item.id === currentImage.id);\
-        if (existingIndex > -1) \{\
-            history[existingIndex] = \{ ...currentImage \};\
-        \} else \{\
-            history.unshift(\{ ...currentImage \});\
-        \}\
-        renderHistory();\
-        // Set the current item as active\
-        setTimeout(() => \{\
-            const el = document.querySelector(`.history-item[data-id='$\{currentImage.id\}']`);\
-            if (el) el.classList.add('active');\
-        \}, 0);\
-    \};\
-\
-    const renderHistory = () => \{\
-        historyItemsContainer.innerHTML = '';\
-        if (history.length === 0) \{\
-            historyItemsContainer.innerHTML = '<p class="no-history">No items yet.</p>';\
-            downloadAllBtn.disabled = true;\
-            clearHistoryBtn.disabled = true;\
-            return;\
-        \}\
-\
-        downloadAllBtn.disabled = false;\
-        clearHistoryBtn.disabled = false;\
-\
-        history.forEach(item => \{\
-            const historyItemEl = document.createElement('div');\
-            historyItemEl.classList.add('history-item');\
-            historyItemEl.dataset.id = item.id;\
-            historyItemEl.innerHTML = `\
-                <img src="$\{item.processedUrl || item.originalUrl\}" alt="Processed thumbnail">\
-                <p>$\{item.name\}.png</p>\
-            `;\
-            historyItemEl.addEventListener('click', () => loadFromHistory(item.id));\
-            historyItemsContainer.appendChild(historyItemEl);\
-        \});\
-    \};\
-    \
-    const loadFromHistory = (id) => \{\
-        const item = history.find(h => h.id === Number(id));\
-        if (!item) return;\
-        \
-        currentImage = \{ ...item \};\
-        \
-        fileUploadInput.value = ''; // Clear file input\
-        beforeImage.src = item.originalUrl;\
-        afterImage.src = item.processedUrl || item.originalUrl;\
-        \
-        if(item.processedUrl) \{\
-            afterImageWrapper.style.opacity = '1';\
-            downloadBtn.disabled = false;\
-            removeBgBtn.disabled = true;\
-        \} else \{\
-            afterImageWrapper.style.opacity = '0';\
-            downloadBtn.disabled = true;\
-            removeBgBtn.disabled = false;\
-        \}\
-        \
-        imagePlaceholder.classList.add('hidden');\
-        imageDisplayArea.classList.remove('hidden');\
-\
-        updateBackgroundColor(item.bgColor);\
-        resetSlider();\
-        \
-        // Update active state in UI\
-        document.querySelectorAll('.history-item.active').forEach(el => el.classList.remove('active'));\
-        document.querySelector(`.history-item[data-id='$\{id\}']`).classList.add('active');\
-    \};\
-    \
-    const clearHistory = () => \{\
-        if(confirm('Are you sure you want to clear the entire history?')) \{\
-            history = [];\
-            renderHistory();\
-            // Reset main view\
-            imagePlaceholder.classList.remove('hidden');\
-            imageDisplayArea.classList.add('hidden');\
-            currentImage = \{\};\
-        \}\
-    \};\
-\
-    // --- Download Functionality ---\
-    const downloadCurrentImage = async () => \{\
-        if (!currentImage.processedUrl) return;\
-\
-        const canvas = document.createElement('canvas');\
-        const ctx = canvas.getContext('2d');\
-        const img = new Image();\
-        img.crossOrigin = "anonymous";\
-        \
-        img.onload = () => \{\
-            canvas.width = img.naturalWidth;\
-            canvas.height = img.naturalHeight;\
-            \
-            if (currentImage.bgColor !== 'transparent') \{\
-                ctx.fillStyle = currentImage.bgColor;\
-                ctx.fillRect(0, 0, canvas.width, canvas.height);\
-            \}\
-            \
-            ctx.drawImage(img, 0, 0);\
-\
-            canvas.toBlob((blob) => \{\
-                saveAs(blob, `$\{currentImage.name\}_bg_removed.png`);\
-            \}, 'image/png');\
-        \};\
-        \
-        img.src = currentImage.processedUrl;\
-    \};\
-    \
-    const downloadAllAsZip = async () => \{\
-        if (history.length === 0) return;\
-        alert('Preparing ZIP file... This may take a moment.');\
-\
-        const zip = new JSZip();\
-        \
-        for (const item of history) \{\
-            if (!item.processedUrl) continue;\
-            try \{\
-                const response = await fetch(item.processedUrl);\
-                const blob = await response.blob();\
-                zip.file(`$\{item.name\}_bg_removed.png`, blob);\
-            \} catch (error) \{\
-                console.error(`Failed to fetch image $\{item.name\}:`, error);\
-            \}\
-        \}\
-\
-        zip.generateAsync(\{ type: 'blob' \}).then((content) => \{\
-            saveAs(content, 'background_removed_images.zip');\
-        \});\
-    \};\
-\
-    // --- Start the App ---\
-    init();\
-\});\
-\
+// DOM Elements
+const splashScreen = document.getElementById('splash-screen');
+const appContainer = document.querySelector('.app-container');
+const imageUpload = document.getElementById('image-upload');
+const fileLabel = document.getElementById('file-label');
+const fileCountDisplay = document.getElementById('file-count-display');
+const removeBgBtn = document.getElementById('remove-bg-btn');
+const progressContainer = document.getElementById('progress-container');
+const progressBar = document.getElementById('progress-bar');
+const progressText = document.getElementById('progress-text');
+const currentFileNameEl = document.getElementById('current-file-name');
+const errorMessageEl = document.getElementById('error-message');
+const historyList = document.getElementById('history-list');
+const clearHistoryBtn = document.getElementById('clear-history-btn');
+const downloadAllBtn = document.getElementById('download-all-btn');
+const resultsDisplay = document.getElementById('results-display');
+
+let processedImages = [];
+let filesToProcess = [];
+let isProcessing = false;
+
+// ------------------- Utility Functions -------------------
+
+function updateHistoryUI() {
+  historyList.innerHTML = '';
+  
+  if (processedImages.length === 0) {
+    historyList.innerHTML = '<p class="empty-message">No images processed yet.</p>';
+    clearHistoryBtn.disabled = true;
+    downloadAllBtn.disabled = true;
+    return;
+  }
+
+  processedImages.forEach((item, index) => {
+    const itemEl = document.createElement('div');
+    itemEl.classList.add('history-item');
+    
+    // Create the image element with a white background for PNG transparency
+    const img = new Image();
+    img.src = item.url;
+    
+    const details = document.createElement('div');
+    details.classList.add('history-item-details');
+    details.innerHTML = `<p class="filename">${item.name}</p><p>Completed</p>`;
+    
+    const downloadBtn = document.createElement('button');
+    downloadBtn.classList.add('download-single-btn');
+    downloadBtn.textContent = 'Download';
+    downloadBtn.onclick = () => downloadSingleImage(item.url, item.name);
+
+    itemEl.appendChild(img);
+    itemEl.appendChild(details);
+    itemEl.appendChild(downloadBtn);
+    historyList.appendChild(itemEl);
+  });
+  
+  clearHistoryBtn.disabled = false;
+  downloadAllBtn.disabled = false;
 }
+
+function updateUploadUI() {
+  const count = filesToProcess.length;
+  fileCountDisplay.textContent = count > 0 ? `${count} file${count > 1 ? 's' : ''} ready to process.` : '';
+  removeBgBtn.disabled = count === 0 || isProcessing;
+}
+
+function setProcessingState(processing) {
+  isProcessing = processing;
+  removeBgBtn.disabled = processing || filesToProcess.length === 0;
+  removeBgBtn.textContent = processing ? 'Processing...' : 'Remove Background';
+  progressContainer.classList.toggle('hidden', !processing);
+}
+
+function updateProgress(fileName, index, total) {
+  const percentage = Math.round((index / total) * 100);
+  progressBar.style.width = `${percentage}%`;
+  progressText.textContent = `${percentage}% Complete (${index}/${total} images)`;
+  currentFileNameEl.textContent = `Processing: ${fileName}`;
+}
+
+function showError(message) {
+  errorMessageEl.textContent = message;
+  errorMessageEl.classList.remove('hidden');
+  setTimeout(() => errorMessageEl.classList.add('hidden'), 5000);
+}
+
+// ------------------- Core Functions -------------------
+
+/**
+ * Converts a file to a Data URL (Base64) for history thumbnails.
+ * @param {File} file 
+ * @returns {Promise<string>}
+ */
+function fileToDataUrl(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
+ * Creates an image element and adds it to the main results grid.
+ * @param {string} url - The URL (Data URL or Blob URL) of the result image.
+ * @param {string} name - The original file name.
+ */
+function displayResult(url, name) {
+  const card = document.createElement('div');
+  card.classList.add('result-card');
+  
+  const imgContainer = document.createElement('div');
+  imgContainer.classList.add('result-image-container');
+  
+  const img = new Image();
+  img.src = url;
+  
+  imgContainer.appendChild(img);
+  
+  const title = document.createElement('p');
+  title.textContent = name;
+  title.style.fontSize = '0.9em';
+  title.style.fontWeight = '600';
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.classList.add('download-single-btn');
+  downloadBtn.textContent = 'Download PNG';
+  downloadBtn.onclick = () => downloadSingleImage(url, name);
+  
+  card.appendChild(imgContainer);
+  card.appendChild(title);
+  card.appendChild(downloadBtn);
+  resultsDisplay.prepend(card); // Add newest at the top
+}
+
+
+/**
+ * Sends a file to the remove.bg API.
+ * @param {File} file 
+ * @returns {Promise<string>} - A promise that resolves to the result image Data URL.
+ */
+async function removeBackground(file) {
+  const formData = new FormData();
+  formData.append('image_file', file);
+  formData.append('size', 'auto');
+  formData.append('format', 'png');
+
+  try {
+    const response = await fetch(REMOVE_BG_API_URL, {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': REMOVE_BG_API_KEY,
+        // NOTE: Do NOT set 'Content-Type' header with FormData, 
+        // the browser will set it automatically with the correct boundary.
+        'Accept': 'image/png' // Requesting the final image file directly
+      },
+      body: formData,
+    });
+
+    if (response.ok) {
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } else {
+      // Handle API-specific errors (e.g., rate limits, invalid file)
+      const errorText = await response.text();
+      let msg = `API Error: ${response.status} - ${errorText.substring(0, 100)}...`;
+      try {
+        const json = JSON.parse(errorText);
+        msg = json.errors ? json.errors[0].title : msg;
+      } catch (e) {
+        // Just use the status code and snippet if JSON parsing fails
+      }
+      throw new Error(msg);
+    }
+
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw new Error(error.message || 'Network error or file processing failed.');
+  }
+}
+
+/**
+ * Main function to process all uploaded files.
+ */
+async function processAllFiles() {
+  if (isProcessing || filesToProcess.length === 0) return;
+
+  setProcessingState(true);
+  let errorOccurred = false;
+
+  for (let i = 0; i < filesToProcess.length; i++) {
+    const file = filesToProcess[i];
+    const originalName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
+    const newFileName = `${originalName}-no-bg.png`;
+
+    updateProgress(file.name, i + 1, filesToProcess.length);
+    
+    try {
+      const resultUrl = await removeBackground(file);
+      
+      // Add to history and display
+      processedImages.push({
+        url: resultUrl,
+        name: newFileName,
+        originalFile: file
+      });
+      
+      displayResult(resultUrl, newFileName);
+      updateHistoryUI();
+      
+    } catch (error) {
+      showError(`Failed to process ${file.name}: ${error.message}`);
+      errorOccurred = true;
+      // Continue to the next file even if one fails
+    }
+  }
+
+  // Clear files to process after job completion
+  filesToProcess = [];
+  imageUpload.value = null; // Clear input field
+  setProcessingState(false);
+  
+  if (!errorOccurred) {
+      updateProgress('All files processed!', filesToProcess.length, filesToProcess.length);
+      setTimeout(() => progressContainer.classList.add('hidden'), 2000);
+  }
+}
+
+// ------------------- Download and History Management -------------------
+
+/**
+ * Handles the download of a single image.
+ * @param {string} url - Blob or Data URL of the image.
+ * @param {string} name - The filename.
+ */
+function downloadSingleImage(url, name) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Downloads all processed images as a ZIP file.
+ */
+async function downloadAllAsZip() {
+  if (processedImages.length === 0) return;
+  
+  downloadAllBtn.textContent = 'Creating ZIP...';
+  downloadAllBtn.disabled = true;
+
+  // JSZip library is required for this. You'd need to add it 
+  // as an external resource in Codepen settings:
+  // <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.5.0/jszip.min.js"></script>
+  if (typeof JSZip === 'undefined') {
+    showError('JSZip library is missing. Please add it to your project!');
+    downloadAllBtn.textContent = 'Download All (ZIP)';
+    downloadAllBtn.disabled = false;
+    return;
+  }
+  
+  const zip = new JSZip();
+
+  for (const item of processedImages) {
+    // Fetch the image blob from the object URL
+    const response = await fetch(item.url);
+    const blob = await response.blob();
+    zip.file(item.name, blob);
+  }
+
+  zip.generateAsync({ type: 'blob' })
+    .then(content => {
+      // Use filesaver.js or a simple download link
+      const zipName = `background-removed-${Date.now()}.zip`;
+      
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = zipName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      downloadAllBtn.textContent = 'Download All (ZIP)';
+      downloadAllBtn.disabled = false;
+    })
+    .catch(error => {
+      showError('Failed to create ZIP file.');
+      console.error(error);
+      downloadAllBtn.textContent = 'Download All (ZIP)';
+      downloadAllBtn.disabled = false;
+    });
+}
+
+function clearHistory() {
+  if (!confirm('Are you sure you want to clear all history and processed images?')) return;
+  processedImages = [];
+  resultsDisplay.innerHTML = '';
+  updateHistoryUI();
+}
+
+// ------------------- Event Listeners -------------------
+
+// 1. Splash Screen Timeout
+window.addEventListener('load', () => {
+  // Use a slight delay for the splash screen effect
+  setTimeout(() => {
+    splashScreen.style.opacity = '0';
+    appContainer.classList.remove('hidden');
+    setTimeout(() => {
+      splashScreen.style.display = 'none';
+    }, 1000); // Wait for the fade-out transition
+  }, 1500);
+});
+
+// 2. File Input Change
+imageUpload.addEventListener('change', (e) => {
+  const newFiles = Array.from(e.target.files);
+  if (newFiles.length > MAX_FILE_COUNT) {
+    showError(`Maximum ${MAX_FILE_COUNT} files allowed. Please select fewer images.`);
+    imageUpload.value = null; // Clear the selection
+    filesToProcess = [];
+  } else {
+    filesToProcess = newFiles;
+  }
+  updateUploadUI();
+});
+
+// 3. Remove Background Button Click
+removeBgBtn.addEventListener('click', processAllFiles);
+
+// 4. History Actions
+clearHistoryBtn.addEventListener('click', clearHistory);
+downloadAllBtn.addEventListener('click', downloadAllAsZip);
+
+// 5. Drag and Drop handlers (to enhance UX)
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+  fileLabel.addEventListener(eventName, preventDefaults, false);
+});
+
+['dragenter', 'dragover'].forEach(eventName => {
+  fileLabel.addEventListener(eventName, () => fileLabel.style.backgroundColor = 'rgba(0, 188, 212, 0.15)', false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+  fileLabel.addEventListener(eventName, () => fileLabel.style.backgroundColor = 'transparent', false);
+});
+
+fileLabel.addEventListener('drop', (e) => {
+  const dt = e.dataTransfer;
+  const files = dt.files;
+  
+  if (files.length > MAX_FILE_COUNT) {
+    showError(`Maximum ${MAX_FILE_COUNT} files allowed.`);
+  } else {
+    imageUpload.files = files; // Set the files to the input element
+    filesToProcess = Array.from(files);
+    updateUploadUI();
+  }
+}, false);
+
+function preventDefaults(e) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+// Initial state setup
+updateHistoryUI(); // Initialize history sidebar
+
+// IMPORTANT: Add external libraries for ZIP functionality (JSZip)
+// You MUST add this script tag in your Codepen's JS settings:
+// https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js
